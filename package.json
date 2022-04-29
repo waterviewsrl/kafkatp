@@ -1,0 +1,27 @@
+{
+  "name": "KTP",
+  "version": "1.0.0",
+  "description": "FTP to Kafka bridge",
+  "author": "Matteo Ferrabone <matteo.ferrabone@waterview.it>",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@msgpack/msgpack": "^2.7.2",
+    "bluebird": "^3.5.1",
+    "bunyan": "^1.8.12",
+    "dotenv": "^16.0.0",
+    "ftp-srv": "^4.6.0",
+    "ip": "^1.1.5",
+    "kafkajs": "^1.16.0",
+    "lodash": "^4.17.21",
+    "log-stream": "^4.0.0",
+    "log2stream": "^3.1.1",
+    "moment": "^2.22.1",
+    "msgpack": "^1.0.3",
+    "netmask": "^2.0.2",
+    "uuid": "^3.2.1",
+    "yargs": "^17.4.1"
+  }
+}
