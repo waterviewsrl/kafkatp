@@ -10,7 +10,7 @@ const fsAsync = require('ftp-srv/src//helpers/fs-async');
 
 const { Writable } = require('stream');
 const { Buffer } = require('buffer');
-Buffer.poolSize = 1024*1024;
+Buffer.poolSize = 1024 * 1024;
 
 const { networkInterfaces } = require('os');
 const { Netmask } = require('netmask');
@@ -21,8 +21,12 @@ const yargs = require('yargs');
 const path = require('path');
 require('dotenv').config();
 
+const { authenticate } = require('ldap-authentication')
+
 const args = setupYargs();
 const state = setupState(args);
+
+let ldap_client = null;
 
 function setupYargs() {
     return yargs
@@ -30,17 +34,37 @@ function setupYargs() {
             alias: 'c',
             describe: 'Load user & pass from json file',
             normalize: true,
-            default: process.env.KAFKATP_CREDENTIALS || ''
+            default: process.env.KAFKATP_CREDENTIALS || null
         })
         .option('username', {
             describe: 'Blank for anonymous',
             type: 'string',
-            default: process.env.KAFKATP_USERNAME || ''
+            default: process.env.KAFKATP_USERNAME || null
         })
         .option('password', {
             describe: 'Password for given username',
             type: 'string',
-            default: process.env.KAFKATP_PASSWORD || ''
+            default: process.env.KAFKATP_PASSWORD || null
+        })
+        .option('ldapserver', {
+            describe: 'LDAP server URL',
+            type: 'string',
+            default: process.env.KAFKATP_LDAPSERVER || null
+        })
+        .option('ldapbinddn', {
+            describe: 'LDAP server bind dn',
+            type: 'string',
+            default: process.env.KAFKATP_LDAPBINDDN || null
+        })
+        .option('ldapbindpass', {
+            describe: 'LDAP server bind password',
+            type: 'string',
+            default: process.env.KAFKATP_LDAPBINDPASS || null
+        })
+        .option('ldapsearch', {
+            describe: 'LDAP domain search',
+            type: 'string',
+            default: process.env.KAFKATP_LDAPSEARCH || null
         })
         .option('root', {
             alias: 'r',
@@ -107,7 +131,7 @@ function setupState(_args) {
     const _state = {};
 
     function setupOptions() {
-        
+
         _state.url = _args.url;
         _state.pasv_url = _args.pasv_url;
         _state.pasv_min = _args.pasv_min;
@@ -155,9 +179,31 @@ function setupState(_args) {
         }
     }
 
+    function setupLdapClient() {
+        _state.ldapserver = _args.ldapserver
+        _state.ldapbinddn = _args.ldapbinddn
+        _state.ldapbindpass = _args.ldapbindpass
+        _state.ldapsearch = _args.ldapsearch
+
+
+
+    }
+
     setupOptions();
     setupRoot();
-    setupCredentials();
+    if (_args.username || args.credentials) {
+        console.log('Setting up static credentials!')
+        setupCredentials();
+    }
+    else if (_args.ldapserver) {
+        console.log('Setting up LDAP client!')
+        setupLdapClient();
+    }
+    else {
+        console.log('No valid auth scheme provided!')
+        process.exit(-1)
+    }
+
     setupCommandBlacklist();
 
     return _state;
@@ -212,6 +258,7 @@ const ftpServer = new FtpSrv({
 
 
 const fs = require('fs');
+const { exit } = require('process');
 
 async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -232,7 +279,7 @@ const admin = kafka.admin();
 (async () => {
     console.log('Connecting admin...');
     await admin.connect();
-    
+
     admin_connected = true;
     console.log('Admin connected: ', admin);
     const topics = await admin.listTopics();
@@ -245,9 +292,9 @@ class WriteStream extends Writable {
         super();
         this.filename = filename;
 
-        this.buf = Buffer.alloc(0);        
-        
-        
+        this.buf = Buffer.alloc(0);
+
+
     }
     _construct(callback) {
         callback();
@@ -261,8 +308,7 @@ class WriteStream extends Writable {
     _final(callback) {
         console.log('FINAL!', this.filename, this.buf.length)
         callback();
-        if (connected)
-        {
+        if (connected) {
             (async () => {
                 console.log('Publishing...');
                 await producer.send({
@@ -277,8 +323,8 @@ class WriteStream extends Writable {
                 console.log('published!');
             })();
         }
-        }
-        
+    }
+
 
     _destroy(err, callback) {
         callback();
@@ -289,7 +335,7 @@ class WriteStream extends Writable {
 class KafkaFS extends FileSystem {
     constructor(connection, { root, cwd } = {}) {
         super(...arguments);
-        
+
     }
 
     get root() {
@@ -343,9 +389,9 @@ class KafkaFS extends FileSystem {
     }
 
     write(fileName, { append = false, start = undefined } = {}) {
-        
+
         const { fsPath, clientPath } = this._resolvePath(fileName);
-        const stream = new WriteStream(this.cwd+"/"+fileName)//createWriteStream('/dev/null', { flags: !append ? 'w+' : 'a+', start });
+        const stream = new WriteStream(this.cwd + "/" + fileName)//createWriteStream('/dev/null', { flags: !append ? 'w+' : 'a+', start });
         stream.once('error', () => stream.end());
         stream.once('close', () => stream.end());
         //const stream = process.stdout;
@@ -362,22 +408,22 @@ class KafkaFS extends FileSystem {
 
     delete(path) {
         console.log('delete')
-        throw new errors.FileSystemError('Cannot delete!'); 
+        throw new errors.FileSystemError('Cannot delete!');
     }
 
     mkdir(path) {
         console.log('mkdir')
-        throw new errors.FileSystemError('Cannot create directories!'); 
+        throw new errors.FileSystemError('Cannot create directories!');
     }
 
     rename(from, to) {
         console.log('rename')
-        throw new errors.FileSystemError('Cannot Rename!'); 
+        throw new errors.FileSystemError('Cannot Rename!');
     }
 
     chmod(path, mode) {
         console.log('chmod')
-        throw new errors.FileSystemError('Cannot chmod!'); 
+        throw new errors.FileSystemError('Cannot chmod!');
     }
 
     getUniqueName() {
@@ -396,8 +442,42 @@ function checkLogin(data, resolve, reject) {
 }
 
 
-ftpServer.on('login', checkLogin);
+async function checkLdapLogin(data, resolve, reject) {
 
-ftpServer.listen().then(() => { 
+    const mfs = new KafkaFS(data.connection, '/', '/');
+
+
+    let options = {
+        ldapOpts: {
+            url: state.ldapserver,
+            // tlsOptions: { rejectUnauthorized: false }
+        },
+        adminDn: state.ldapbinddn,
+        adminPassword: state.ldapbindpass,
+        userPassword: data.password,
+        userSearchBase: state.ldapsearch,
+        usernameAttribute: 'uid',
+        username: data.username,
+        // starttls: false
+    };
+
+    console.log('OPTIONS: ', options)
+
+    try {
+        const user = await authenticate(options)
+        return resolve({ root: '/', fs: mfs });
+
+    }
+    catch (err) {
+        return reject(new errors.GeneralError('Invalid username or password', 401));
+    }
+
+}
+
+
+
+ftpServer.on('login', state.ldapserver ? checkLdapLogin : checkLogin);
+
+ftpServer.listen().then(() => {
     console.log('Ftp server is starting...')
 });
