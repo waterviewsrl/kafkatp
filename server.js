@@ -92,7 +92,7 @@ function setupYargs() {
             describe: 'URL to provide for passive connections',
             type: 'string',
             alias: 'pasv_url',
-            default: process.env.KAFKATP_PASVURL || 'localhost'
+            default: process.env.KAFKATP_PASVURL || null
         })
         .option('pasv-min', {
             describe: 'Starting point to use when creating passive connections',
@@ -249,7 +249,7 @@ const WIN_SEP_REGEX = /\\/g;
 
 const ftpServer = new FtpSrv({
     url: state.url,
-    pasv_url: state.pasv_url,
+    pasv_url: state.pasv_url || resolverFunction,
     pasv_min: state.pasv_min,
     pasv_max: state.pasv_max,
     anonymous: state.anonymous,
@@ -444,7 +444,9 @@ function checkLogin(data, resolve, reject) {
 
 async function checkLdapLogin(data, resolve, reject) {
 
-    const mfs = new KafkaFS(data.connection, '/', '/');
+    const basepath = '/home/' + data.username
+
+    const mfs = new KafkaFS(data.connection, basepath, basepath);
 
 
     let options = {
@@ -465,7 +467,7 @@ async function checkLdapLogin(data, resolve, reject) {
 
     try {
         const user = await authenticate(options)
-        return resolve({ root: '/', fs: mfs });
+        return resolve({ root: basepath, fs: mfs });
 
     }
     catch (err) {

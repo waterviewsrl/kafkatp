@@ -1,6 +1,6 @@
 {
   "name": "KTP",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "FTP to Kafka bridge",
   "author": "Matteo Ferrabone <matteo.ferrabone@waterview.it>",
   "main": "server.js",
