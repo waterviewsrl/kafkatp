@@ -335,8 +335,11 @@ class WriteStream extends Writable {
 class KafkaFS extends FileSystem {
     constructor(connection, { root, cwd } = {}) {
         super(...arguments);
-
+	//this._root = root
+	//this._cwd = cwd
+        console.log('Setting up Kafka FS on: '+this._root+' ' + this.cwd + ' ' + root + ' ' + cwd)
     }
+
 
     get root() {
         return this._root;
@@ -391,7 +394,7 @@ class KafkaFS extends FileSystem {
     write(fileName, { append = false, start = undefined } = {}) {
 
         const { fsPath, clientPath } = this._resolvePath(fileName);
-        const stream = new WriteStream(this.cwd + "/" + fileName)//createWriteStream('/dev/null', { flags: !append ? 'w+' : 'a+', start });
+        const stream = new WriteStream(this._root + "/" + fileName)//createWriteStream('/dev/null', { flags: !append ? 'w+' : 'a+', start });
         stream.once('error', () => stream.end());
         stream.once('close', () => stream.end());
         //const stream = process.stdout;
@@ -446,7 +449,7 @@ async function checkLdapLogin(data, resolve, reject) {
 
     const basepath = '/home/' + data.username
 
-    const mfs = new KafkaFS(data.connection, basepath, basepath);
+    const mfs = new KafkaFS(data.connection, {root: basepath, cwd: basepath});
 
 
     let options = {
